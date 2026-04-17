@@ -42,4 +42,5 @@ def test_merge():
         {256: b"st", 257: b"est", 258: b"ow", 259: b"low", 260: b"west", 261: b"ne"},
         [(b"s", b"t"), (b"e", b"st"), (b"o", b"w"), (b"l", b"ow"), (b"w", b"est"), (b"n", b"e")],
     )
-    assert merge(byte_word_counter, pairs_counter, 6) == output
+    ans = merge(byte_word_counter, pairs_counter, 6)
+    assert ans == output

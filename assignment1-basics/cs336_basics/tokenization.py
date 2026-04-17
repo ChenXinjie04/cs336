@@ -8,7 +8,7 @@ from collections import Counter
 FILE_PATH = "../data/TinyStoriesV2-GPT4-valid.txt"
 type StrWordCounter = Counter[str]
 type ByteWordCounter = Counter[tuple[bytes, ...]]
-type BytePairCounter = Counter[tuple[bytes, bytes]]
+type BytePairCounter = Counter[tuple[bytes, ...]]
 
 
 def find_chunk_boundaries(
@@ -100,8 +100,32 @@ def tupecnt2paircnt(tuple_map):
     return pairs_counter
 
 
-def _merge_key(tuples_counter, pairs_counter):
-    return
+def _merge_key(
+    byte_word_counter: ByteWordCounter, pairs_counter: BytePairCounter, max_pair: tuple[bytes, ...]
+) -> ByteWordCounter:
+    pairs_counter[max_pair] = 0
+    new_byte_word_counter = Counter()
+    new_bytes = max_pair[0] + max_pair[1]
+    for bytes_tuple, cnt in byte_word_counter.items():
+        i = 0
+        bytes_list = []
+        while i < len(bytes_tuple) - 1:
+            if bytes_tuple[i : i + 2] == max_pair:
+                bytes_list.append(bytes_tuple[i] + bytes_tuple[i + 1])
+                if i - 1 >= 0:
+                    pairs_counter[bytes_tuple[i - 1 : i + 1]] -= cnt
+                    pairs_counter[tuple([bytes_tuple[i - 1], new_bytes])] += cnt
+                if i + 2 <= len(bytes_tuple) - 1:
+                    pairs_counter[bytes_tuple[i + 1 : i + 3]] -= cnt
+                    pairs_counter[tuple([new_bytes, bytes_tuple[i + 2]])] += cnt
+                i += 1
+            else:
+                bytes_list.append(bytes_tuple[i])
+            i += 1
+        if i == len(bytes_tuple) - 1:
+            bytes_list.append(bytes_tuple[-1])
+        new_byte_word_counter[tuple(bytes_list)] = cnt
+    return new_byte_word_counter
 
 
 def merge(
@@ -122,11 +146,11 @@ def merge(
         merges.append(max_pair)
         vocab[start_id] = max_pair[0] + max_pair[1]
         start_id += 1
-    raise NotImplementedError
+        byte_word_counter = _merge_key(byte_word_counter, pairs_counter, max_pair)
+    return vocab, merges
 
 
 if __name__ == "__main__":
-    print("hello")
     ## Usage
     iteration = 4
     with open(FILE_PATH, "rb") as f:
