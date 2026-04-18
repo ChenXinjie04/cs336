@@ -3,6 +3,7 @@ from typing import BinaryIO
 from multiprocessing import Pool
 import re
 import regex
+import pickle
 from collections import Counter
 
 type StrWordCounter = Counter[str]
@@ -169,4 +170,12 @@ def train_bpe(
         vocab[i] = bytes([i])
     for i in range(len(special_tokens)):
         vocab[iteration + 256 + i] = special_tokens[i].encode()
+    with open("tokenization_result.pkl", "wb") as f:
+        pickle.dump((vocab, merges), f)
     return vocab, merges
+
+
+if __name__ == "__main__":
+    train_bpe(
+        os.path.expanduser("~/cs336/assignment1-basics/data/TinyStoriesV2-GPT4-train.txt"), 1000, ["<|endoftext|>"]
+    )
