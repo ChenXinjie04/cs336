@@ -5,7 +5,6 @@ import re
 import regex
 from collections import Counter
 
-FILE_PATH = "../data/TinyStoriesV2-GPT4-valid.txt"
 type StrWordCounter = Counter[str]
 type ByteWordCounter = Counter[tuple[bytes, ...]]
 type BytePairCounter = Counter[tuple[bytes, ...]]
@@ -76,11 +75,11 @@ def encode_to_word(str_word_counter: StrWordCounter) -> ByteWordCounter:
     return word_table
 
 
-def pre_token(start, end):
+def pre_token(input_path, start, end):
     special_token = "<|endoftext|>"
     special_token = re.escape(special_token)
     pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    with open(FILE_PATH, "rb") as f:
+    with open(input_path, "rb") as f:
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="strict")
         splits = re.split(special_token, chunk)
@@ -144,19 +143,21 @@ def merge(
     for _ in range(iteration):
         max_pair = max(pairs_counter, key=lambda x: (pairs_counter[x], x))
         merges.append(max_pair)
-        vocab[start_id] = max_pair[0] + max_pair[1]
+        new_vocab = max_pair[0] + max_pair[1]
+        vocab[start_id] = new_vocab
         start_id += 1
         byte_word_counter = _merge_key(byte_word_counter, pairs_counter, max_pair)
     return vocab, merges
 
 
-if __name__ == "__main__":
-    ## Usage
-    iteration = 4
-    with open(FILE_PATH, "rb") as f:
+def train_bpe(
+    input_path: str | os.PathLike, vocab_size: int, special_tokens: list[str]
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+    iteration = vocab_size - len(special_tokens) - 256
+    with open(input_path, "rb") as f:
         num_processes = 4
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-    args = [(start, end) for start, end in zip(boundaries[:-1], boundaries[1:])]
+    args = [(input_path, start, end) for start, end in zip(boundaries[:-1], boundaries[1:])]
     with Pool(num_processes) as p:
         ans = p.starmap(pre_token, args)
     tuples_counter = Counter()
@@ -164,3 +165,8 @@ if __name__ == "__main__":
         tuples_counter += c
     pairs_counter = tupecnt2paircnt(tuples_counter)
     vocab, merges = merge(tuples_counter, pairs_counter, iteration)
+    for i in range(256):
+        vocab[i] = bytes([i])
+    for i in range(len(special_tokens)):
+        vocab[iteration + 256 + i] = special_tokens[i].encode()
+    return vocab, merges
