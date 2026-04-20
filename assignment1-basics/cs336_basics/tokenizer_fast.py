@@ -80,7 +80,7 @@ def encode_to_word(str_word_counter: StrWordCounter) -> ByteWordCounter:
     for key in str_word_counter:
         if key == "":
             continue
-        if len(key) < 2:
+        if len(key.encode()) < 2:
             continue
         bytes_key = key.encode()
         bytes_tuple = tuple([bytes_key[i : i + 1] for i in range(len(bytes_key))])
@@ -149,6 +149,8 @@ def _merge_key(state: BpeState, max_pair: tuple[bytes, bytes]):
                     old_pair = (tuple_word[i], tuple_word[i + 1])
                     old_set.add(old_pair)
                     pairs_counter[old_pair] -= cnt
+                    if pairs_counter[old_pair] == 0:
+                        del pairs_counter[old_pair]
             else:
                 list_word.append(tuple_word[i])
             i += 1
@@ -211,8 +213,8 @@ def train_bpe(
     vocab, merges = merge(tuples_counter, iteration)
     for i in range(256):
         vocab[i] = bytes([i])
-    for i in range(len(special_tokens)):
-        vocab[iteration + 256 + i] = special_tokens[i].encode()
+    for next_token_id, token in enumerate(special_tokens, start=len(vocab)):
+        vocab[next_token_id] = token.encode()
     return vocab, merges
 
 
