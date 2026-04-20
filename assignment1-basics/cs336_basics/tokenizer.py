@@ -103,7 +103,6 @@ def tupecnt2paircnt(tuple_map):
 def _merge_key(
     byte_word_counter: ByteWordCounter, pairs_counter: BytePairCounter, max_pair: tuple[bytes, ...]
 ) -> ByteWordCounter:
-    pairs_counter[max_pair] = 0
     new_byte_word_counter = Counter()
     new_bytes = max_pair[0] + max_pair[1]
     for bytes_tuple, cnt in byte_word_counter.items():
@@ -111,13 +110,14 @@ def _merge_key(
         bytes_list = []
         while i < len(bytes_tuple) - 1:
             if bytes_tuple[i : i + 2] == max_pair:
-                bytes_list.append(bytes_tuple[i] + bytes_tuple[i + 1])
+                pairs_counter[max_pair] -= cnt
                 if i - 1 >= 0:
-                    pairs_counter[bytes_tuple[i - 1 : i + 1]] -= cnt
-                    pairs_counter[tuple([bytes_tuple[i - 1], new_bytes])] += cnt
+                    pairs_counter[tuple([bytes_list[-1], bytes_tuple[i]])] -= cnt
+                    pairs_counter[tuple([bytes_list[-1], new_bytes])] += cnt
                 if i + 2 <= len(bytes_tuple) - 1:
                     pairs_counter[bytes_tuple[i + 1 : i + 3]] -= cnt
                     pairs_counter[tuple([new_bytes, bytes_tuple[i + 2]])] += cnt
+                bytes_list.append(bytes_tuple[i] + bytes_tuple[i + 1])
                 i += 1
             else:
                 bytes_list.append(bytes_tuple[i])
@@ -141,8 +141,11 @@ def merge(
     vocab = {}
     merges = []
     start_id = 256
-    for _ in range(iteration):
+    for i in range(iteration):
         max_pair = max(pairs_counter, key=lambda x: (pairs_counter[x], x))
+        if pairs_counter[max_pair] == 0:
+            print(pairs_counter)
+            return vocab, merges
         merges.append(max_pair)
         new_vocab = max_pair[0] + max_pair[1]
         vocab[start_id] = new_vocab
