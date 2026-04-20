@@ -5,6 +5,7 @@ image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("wget")
     .pip_install("regex")
+    .pip_install("py-spy")
     .add_local_python_source("cs336_basics")
 )
 vol = modal.Volume.from_name("cs336-data", create_if_missing=True)
@@ -49,8 +50,8 @@ def verify():
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
 def train():
     from cs336_basics.tokenizer_fast import train_bpe
-    import pickle
     import time
+    import pickle
 
     start = time.perf_counter()
     ans = train_bpe("/data/TinyStoriesV2-GPT4-train.txt", 10000, ["<|endoftext|>"])
@@ -72,3 +73,24 @@ def profile():
     with open("/data/tokenizer.pkl", "wb") as f:
         pickle.dump(ans, f)
     vol.commit()
+
+
+@app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
+def flamegraph():
+    import subprocess
+
+    cmd = [
+        "py-spy",
+        "record",
+        "-o",
+        "/data/flame.svg",
+        "--subprocesses",
+        "--rate",
+        "250",
+        "--idle",
+        "--",
+        "python",
+        "-c",
+        "from cs336_basics.tokenizer_fast import train_bpe; train_bpe('/data/TinyStoriesV2-GPT4-train.txt', 500, ['<|endoftext|>'])",
+    ]
+    subprocess.run(cmd, check=True)
