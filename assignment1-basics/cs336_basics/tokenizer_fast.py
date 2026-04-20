@@ -4,11 +4,21 @@ from multiprocessing import Pool
 import re
 import regex
 import pickle
-from collections import Counter
+from collections import Counter, defaultdict
+from dataclasses import dataclass
 
 type StrWordCounter = Counter[str]
 type ByteWordCounter = Counter[tuple[bytes, ...]]
-type BytePairCounter = Counter[tuple[bytes, ...]]
+type BytePairCounter = Counter[tuple[bytes, bytes]]
+type WordEntryList = list[tuple[tuple[bytes, ...], int]]
+type PairTable = defaultdict[tuple[bytes, bytes], set[int]]
+
+
+@dataclass
+class BpeState:
+    pair_to_word_ids: PairTable
+    word_id_to_entry: WordEntryList
+    pairs_counter: BytePairCounter
 
 
 def find_chunk_boundaries(
@@ -70,7 +80,7 @@ def encode_to_word(str_word_counter: StrWordCounter) -> ByteWordCounter:
     for key in str_word_counter:
         if key == "":
             continue
-        elif len(key) < 2:
+        if len(key) < 2:
             continue
         bytes_key = key.encode()
         bytes_tuple = tuple([bytes_key[i : i + 1] for i in range(len(bytes_key))])
@@ -102,37 +112,63 @@ def tupecnt2paircnt(tuple_map):
     return pairs_counter
 
 
-def _merge_key(
-    byte_word_counter: ByteWordCounter, pairs_counter: BytePairCounter, max_pair: tuple[bytes, ...]
-) -> ByteWordCounter:
-    new_byte_word_counter = Counter()
-    new_bytes = max_pair[0] + max_pair[1]
-    for bytes_tuple, cnt in byte_word_counter.items():
+def init_merge_state(byte_word_counter: ByteWordCounter) -> BpeState:
+    pair_to_word_ids = defaultdict(set)
+    word_id_to_entry = []
+    pairs_counter = Counter()
+    for idx, (key, value) in enumerate(byte_word_counter.items()):
+        word_id_to_entry.append((key, value))
+        for i in range(len(key) - 1):
+            pair = (key[i], key[i + 1])
+            pair_to_word_ids[pair].add(idx)
+            pairs_counter[pair] += value
+    return BpeState(pair_to_word_ids, word_id_to_entry, pairs_counter)
+
+
+def _merge_key(state: BpeState, max_pair: tuple[bytes, bytes]):
+    pair_to_word_ids = state.pair_to_word_ids
+    word_id_to_entry = state.word_id_to_entry
+    pairs_counter = state.pairs_counter
+    ids = pair_to_word_ids[max_pair].copy()
+    for idx in ids:
+        (tuple_word, cnt) = word_id_to_entry[idx]
+        list_word = []
+        old_set = set()
+        new_set = set()
         i = 0
-        bytes_list = []
-        while i < len(bytes_tuple) - 1:
-            if bytes_tuple[i : i + 2] == max_pair:
-                pairs_counter[max_pair] -= cnt
-                if i - 1 >= 0:
-                    pairs_counter[tuple([bytes_list[-1], bytes_tuple[i]])] -= cnt
-                    pairs_counter[tuple([bytes_list[-1], new_bytes])] += cnt
-                if i + 2 <= len(bytes_tuple) - 1:
-                    pairs_counter[bytes_tuple[i + 1 : i + 3]] -= cnt
-                    pairs_counter[tuple([new_bytes, bytes_tuple[i + 2]])] += cnt
-                bytes_list.append(bytes_tuple[i] + bytes_tuple[i + 1])
+        while i < len(tuple_word) - 1:
+            old_pair = (tuple_word[i], tuple_word[i + 1])
+            old_set.add(old_pair)
+            pairs_counter[old_pair] -= cnt
+            if pairs_counter[old_pair] == 0:
+                del pairs_counter[old_pair]
+            if tuple_word[i : i + 2] == max_pair:
+                list_word.append(tuple_word[i] + tuple_word[i + 1])
                 i += 1
+                if i + 1 <= len(tuple_word) - 1:
+                    old_pair = (tuple_word[i], tuple_word[i + 1])
+                    old_set.add(old_pair)
+                    pairs_counter[old_pair] -= cnt
             else:
-                bytes_list.append(bytes_tuple[i])
+                list_word.append(tuple_word[i])
             i += 1
-        if i == len(bytes_tuple) - 1:
-            bytes_list.append(bytes_tuple[-1])
-        new_byte_word_counter[tuple(bytes_list)] = cnt
-    return new_byte_word_counter
+        if i == len(tuple_word) - 1:
+            list_word.append(tuple_word[-1])
+        tuple_word = tuple(list_word)
+        for i in range(len(tuple_word) - 1):
+            new_pair = (tuple_word[i], tuple_word[i + 1])
+            new_set.add(new_pair)
+            pairs_counter[new_pair] += cnt
+        word_id_to_entry[idx] = (tuple_word, cnt)
+        for p in old_set - new_set:
+            pair_to_word_ids[p].remove(idx)
+            if not pair_to_word_ids[p]:
+                del pair_to_word_ids[p]
+        for p in new_set - old_set:
+            pair_to_word_ids[p].add(idx)
 
 
-def merge(
-    byte_word_counter: ByteWordCounter, pairs_counter: BytePairCounter, iteration: int
-) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+def merge(byte_word_counter: ByteWordCounter, iteration: int) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     """
     Run BPE by iteration rounds; each round finds the most frequent pair and merges it.
     Break tie by lexicographically greater pair(tuple comparison).
@@ -143,15 +179,17 @@ def merge(
     vocab = {}
     merges = []
     start_id = 256
+    state = init_merge_state(byte_word_counter)
+    pairs_counter = state.pairs_counter
     for _ in range(iteration):
+        if len(pairs_counter) == 0:
+            break
         max_pair = max(pairs_counter, key=lambda x: (pairs_counter[x], x))
-        if pairs_counter[max_pair] == 0:
-            return vocab, merges
         merges.append(max_pair)
         new_vocab = max_pair[0] + max_pair[1]
         vocab[start_id] = new_vocab
         start_id += 1
-        byte_word_counter = _merge_key(byte_word_counter, pairs_counter, max_pair)
+        _merge_key(state, max_pair)
     return vocab, merges
 
 
@@ -170,8 +208,7 @@ def train_bpe(
         tuples_counter += c
     if len(tuples_counter) == 0:
         return {}, []
-    pairs_counter = tupecnt2paircnt(tuples_counter)
-    vocab, merges = merge(tuples_counter, pairs_counter, iteration)
+    vocab, merges = merge(tuples_counter, iteration)
     for i in range(256):
         vocab[i] = bytes([i])
     for i in range(len(special_tokens)):

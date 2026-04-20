@@ -1,5 +1,5 @@
-from cs336_basics.tokenizer import encode_to_word, merge, tupecnt2paircnt
-from collections import Counter
+from cs336_basics.tokenizer_fast import BpeState, encode_to_word, init_merge_state, merge, tupecnt2paircnt, _merge_key
+from collections import Counter, defaultdict
 
 
 def test_encode_to_word():
@@ -48,7 +48,7 @@ def test_merge_basic():
         {256: b"st", 257: b"est", 258: b"ow", 259: b"low", 260: b"west", 261: b"ne"},
         [(b"s", b"t"), (b"e", b"st"), (b"o", b"w"), (b"l", b"ow"), (b"w", b"est"), (b"n", b"e")],
     )
-    ans = merge(byte_word_counter, pairs_counter, 6)
+    ans = merge(byte_word_counter, 6)
     assert ans == output
 
 
@@ -82,7 +82,7 @@ def test_merge_corner_case():
             (b"aa", b"a"),
         ],
     )
-    ans = merge(byte_word_counter, pairs_counter, 7)
+    ans = merge(byte_word_counter, 7)
     assert ans == output
 
 
@@ -97,5 +97,34 @@ def test_merge_out_of_pairs():
         {256: b"aa", 257: b"aaaa"},
         [(b"a", b"a"), (b"aa", b"aa")],
     )
-    ans = merge(byte_word_counter, pairs_counter, 4)
+    ans = merge(byte_word_counter, 4)
     assert ans == output
+
+
+def test_init_merge_state_basic():
+    input = Counter({(b"a", b"b", b"a", b"b"): 3, (b"x", b"y"): 4})
+    state = init_merge_state(input)
+    assert state.pair_to_word_ids[(b"a", b"b")] == {0}
+    assert state.pair_to_word_ids[(b"x", b"y")] == {1}
+    assert state.pair_to_word_ids[(b"b", b"a")] == {0}
+    assert state.word_id_to_entry[0] == ((b"a", b"b", b"a", b"b"), 3)
+    assert state.word_id_to_entry[1] == ((b"x", b"y"), 4)
+    assert state.pairs_counter[(b"a", b"b")] == 6
+    assert state.pairs_counter[(b"b", b"a")] == 3
+    assert state.pairs_counter[(b"x", b"y")] == 4
+
+
+def test_merge_key_basic():
+    input_state = BpeState(
+        defaultdict(set, {(b"a", b"b"): {0}, (b"b", b"a"): {0}}),
+        [((b"a", b"b", b"a", b"b"), 3)],
+        Counter({(b"a", b"b"): 6, (b"b", b"a"): 3}),
+    )
+    max_pair = (b"a", b"b")
+    output_state = BpeState(
+        defaultdict(set, {(b"ab", b"ab"): {0}}),
+        [((b"ab", b"ab"), 3)],
+        Counter({(b"ab", b"ab"): 3}),
+    )
+    _merge_key(input_state, max_pair)
+    assert input_state == output_state
