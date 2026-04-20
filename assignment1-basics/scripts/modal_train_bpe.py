@@ -48,7 +48,7 @@ def verify():
 
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
 def train():
-    from cs336_basics.tokenization import train_bpe
+    from cs336_basics.tokenizer_fast import train_bpe
     import pickle
     import time
 
@@ -58,3 +58,17 @@ def train():
         pickle.dump(ans, f)
     vol.commit()
     print(time.perf_counter() - start)
+
+
+@app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
+def profile():
+    from cs336_basics.tokenizer_fast import train_bpe
+    import pickle
+    import cProfile
+
+    with cProfile.Profile() as pr:
+        ans = train_bpe("/data/TinyStoriesV2-GPT4-train.txt", 10000, ["<|endoftext|>"])
+        pr.dump_stats("/data/tokenizer_fast.prof")
+    with open("/data/tokenizer.pkl", "wb") as f:
+        pickle.dump(ans, f)
+    vol.commit()

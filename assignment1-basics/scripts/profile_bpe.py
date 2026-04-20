@@ -1,4 +1,4 @@
-from cs336_basics.tokenization import train_bpe
+from cs336_basics.tokenizer import train_bpe
 import os
 import cProfile
 
