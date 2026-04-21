@@ -6,7 +6,6 @@ import regex
 import pickle
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-import time
 
 type StrWordCounter = Counter[str]
 type ByteWordCounter = Counter[tuple[bytes, ...]]
@@ -90,7 +89,6 @@ def encode_to_word(str_word_counter: StrWordCounter) -> ByteWordCounter:
 
 
 def pre_token(input_path, start, end):
-    start_time = time.perf_counter()
     special_token = "<|endoftext|>"
     special_token = re.escape(special_token)
     pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -103,8 +101,7 @@ def pre_token(input_path, start, end):
             pre_tokens += regex.findall(pattern, document)
         string_counter = Counter(pre_tokens)
         bytes_counter = encode_to_word(string_counter)
-    end_time = time.perf_counter()
-    return bytes_counter, end_time - start_time
+    return bytes_counter
 
 
 def tupecnt2paircnt(tuple_map):
@@ -207,15 +204,11 @@ def train_bpe(
         num_processes = 4
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
     args = [(input_path, start, end) for start, end in zip(boundaries[:-1], boundaries[1:])]
-    start_time = time.perf_counter()
     with Pool(num_processes) as p:
         ans = p.starmap(pre_token, args)
-    end_time = time.perf_counter()
     tuples_counter = Counter()
     for c in ans:
-        tuples_counter += c[0]
-        print("time: ", c[1])
-    print("total time: ", end_time - start_time)
+        tuples_counter += c
     if len(tuples_counter) == 0:
         return {}, []
     vocab, merges = merge(tuples_counter, iteration)

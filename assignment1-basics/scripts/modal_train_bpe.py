@@ -6,6 +6,7 @@ image = (
     .apt_install("wget")
     .pip_install("regex")
     .pip_install("py-spy")
+    .pip_install("gunzip")
     .add_local_python_source("cs336_basics")
 )
 vol = modal.Volume.from_name("cs336-data", create_if_missing=True)
@@ -21,11 +22,23 @@ def probe():
 
 
 @app.function(image=image, volumes={"/data": vol})
-def download_data():
+def download_tiny_stories_data():
     import subprocess
 
     subprocess.run(
         "wget -O /data/TinyStoriesV2-GPT4-train.txt --progress=dot:giga https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-train.txt",
+        shell=True,
+        check=True,
+    )
+    vol.commit()
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=1800)
+def download_owt_data():
+    import subprocess
+
+    subprocess.run(
+        "gunzip /data/owt_train.txt.gz",
         shell=True,
         check=True,
     )
@@ -48,17 +61,31 @@ def verify():
 
 
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
-def train():
+def train_tiny_stories():
     from cs336_basics.tokenizer_fast import train_bpe
     import time
     import pickle
 
     start = time.perf_counter()
     ans = train_bpe("/data/TinyStoriesV2-GPT4-train.txt", 10000, ["<|endoftext|>"])
-    with open("/data/tokenizer.pkl", "wb") as f:
+    print(time.perf_counter() - start)
+    with open("/data/tokenizer_tiny_stories.pkl", "wb") as f:
         pickle.dump(ans, f)
     vol.commit()
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=12 * 3600)
+def train_owt():
+    from cs336_basics.tokenizer_fast import train_bpe
+    import time
+    import pickle
+
+    start = time.perf_counter()
+    ans = train_bpe("/data/owt_train.txt", 32000, ["<|endoftext|>"])
     print(time.perf_counter() - start)
+    with open("/data/tokenizer_owt.pkl", "wb") as f:
+        pickle.dump(ans, f)
+    vol.commit()
 
 
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
@@ -73,24 +100,3 @@ def profile():
     with open("/data/tokenizer.pkl", "wb") as f:
         pickle.dump(ans, f)
     vol.commit()
-
-
-@app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
-def flamegraph():
-    import subprocess
-
-    cmd = [
-        "py-spy",
-        "record",
-        "-o",
-        "/data/flame.svg",
-        "--subprocesses",
-        "--rate",
-        "250",
-        "--idle",
-        "--",
-        "python",
-        "-c",
-        "from cs336_basics.tokenizer_fast import train_bpe; train_bpe('/data/TinyStoriesV2-GPT4-train.txt', 500, ['<|endoftext|>'])",
-    ]
-    subprocess.run(cmd, check=True)
