@@ -1,4 +1,4 @@
-from cs336_basics.tokenizer import encode_to_word, merge, tupecnt2paircnt
+from cs336_basics.train_bpe import encode_to_word, merge, tupecnt2paircnt
 from collections import Counter
 
 

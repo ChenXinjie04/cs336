@@ -1,4 +1,4 @@
-from cs336_basics.tokenizer_fast import BpeState, encode_to_word, init_merge_state, merge, tupecnt2paircnt, _merge_key
+from cs336_basics.train_bpe_fast import BpeState, encode_to_word, init_merge_state, merge, tupecnt2paircnt, _merge_key
 from collections import Counter, defaultdict
 
 

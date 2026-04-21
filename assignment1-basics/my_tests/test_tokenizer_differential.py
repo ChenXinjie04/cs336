@@ -1,6 +1,5 @@
-import os
-from cs336_basics import tokenizer
-from cs336_basics import tokenizer_fast
+from cs336_basics import train_bpe
+from cs336_basics import train_bpe_fast
 from pathlib import Path
 
 special_tokens = ["<|endoftext|>"]
@@ -10,8 +9,8 @@ assert SMOKE_PATH.exists(), f"smoke data not found: {SMOKE_PATH}"
 
 def test_smoke():
     vocab_size = 10000
-    (slow_vocab, slow_merges) = tokenizer.train_bpe(SMOKE_PATH, vocab_size, special_tokens)
-    (fast_vocab, fast_merges) = tokenizer_fast.train_bpe(SMOKE_PATH, vocab_size, special_tokens)
+    (slow_vocab, slow_merges) = train_bpe.train_bpe(SMOKE_PATH, vocab_size, special_tokens)
+    (fast_vocab, fast_merges) = train_bpe_fast.train_bpe(SMOKE_PATH, vocab_size, special_tokens)
     vocab_idx = -1
     merge_idx = -1
     assert len(slow_vocab) == len(fast_vocab), "different length"

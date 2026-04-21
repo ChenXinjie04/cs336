@@ -62,7 +62,7 @@ def verify():
 
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
 def train_tiny_stories():
-    from cs336_basics.tokenizer_fast import train_bpe
+    from cs336_basics.train_bpe_fast import train_bpe
     import time
     import pickle
 
@@ -76,7 +76,7 @@ def train_tiny_stories():
 
 @app.function(image=image, volumes={"/data": vol}, timeout=12 * 3600)
 def train_owt():
-    from cs336_basics.tokenizer_fast import train_bpe
+    from cs336_basics.train_bpe_fast import train_bpe
     import time
     import pickle
 
@@ -90,7 +90,7 @@ def train_owt():
 
 @app.function(image=image, volumes={"/data": vol}, cpu=4.0, memory=30 * 1024, timeout=1800)
 def profile():
-    from cs336_basics.tokenizer_fast import train_bpe
+    from cs336_basics.train_bpe import train_bpe
     import pickle
     import cProfile
 

@@ -166,3 +166,4 @@ data/
 *.prof
 *.pkl
 prof_result
+tokenizers
