@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "munger-perspective": {
+      "source": "alchaincyf/munger-skill",
+      "sourceType": "github",
+      "computedHash": "84fb7be90f56e442e47fd74ae4abb6faa37dd7885d0199c7d4de77654614fa80"
+    }
+  }
+}
