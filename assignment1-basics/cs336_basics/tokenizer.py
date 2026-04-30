@@ -15,12 +15,14 @@ class Tokenizer:
         self.merges = merges
         self.bytes_to_id = {v: k for k, v in vocab.items()}
         self.special_tokens = special_tokens
+        self.pair_dict = {merge: idx for idx, merge in enumerate(merges)}
+        self.end_of_token = len(vocab)
 
     @classmethod
     def from_files(cls, filepath, special_tokens=None):
         with open(filepath, "rb") as f:
             vocab, merges = pickle.load(f)
-        cls(vocab, merges, special_tokens)
+        return cls(vocab, merges, special_tokens)
 
     def encode(self, text: str) -> list[int]:
         if self.special_tokens:
@@ -53,16 +55,28 @@ class Tokenizer:
             yield from self.encode(line)
 
     def _merge_word(self, word):
-        bytes_word: tuple[bytes, ...] = tuple(word.encode()[i : i + 1] for i in range(len(word.encode())))
-        for merge in self.merges:
-            outlist = []
+        bytes_word = word.encode()
+        bytes_list = [bytes_word[i : i + 1] for i in range(len(bytes_word))]
+        while True:
+            new_bytes_list = []
+            merge_pair = ()
+            min_id = self.end_of_token
+            for i in range(len(bytes_list) - 1):
+                cur_pair = (bytes_list[i], bytes_list[i + 1])
+                if cur_pair not in self.pair_dict:
+                    continue
+                if self.pair_dict[cur_pair] < min_id:
+                    min_id = self.pair_dict[cur_pair]
+                    merge_pair = cur_pair
+            if min_id == self.end_of_token:
+                break
             i = 0
-            while i < len(bytes_word):
-                if i + 1 < len(bytes_word) and (bytes_word[i], bytes_word[i + 1]) == merge:
-                    outlist.append(bytes_word[i] + bytes_word[i + 1])
+            while i < len(bytes_list):
+                if i + 1 < len(bytes_list) and (bytes_list[i], bytes_list[i + 1]) == merge_pair:
+                    new_bytes_list.append(bytes_list[i] + bytes_list[i + 1])
                     i += 2
                 else:
-                    outlist.append(bytes_word[i])
+                    new_bytes_list.append(bytes_list[i])
                     i += 1
-            bytes_word = tuple(outlist)
-        return bytes_word
+            bytes_list = new_bytes_list
+        return bytes_list
