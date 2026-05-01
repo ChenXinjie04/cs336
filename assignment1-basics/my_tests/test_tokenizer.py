@@ -11,5 +11,3 @@ def test_encode():
         2,
         3,
     ]
-
-def test_unicode_roundtrip():
