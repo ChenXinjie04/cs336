@@ -40,3 +40,18 @@ class RMSNorm(nn.Module):
         denom = rearrange(denom, "... -> ... 1")
         result = (x / denom) * self.weights
         return result.to(in_type)
+
+
+class SWiGLU(nn.Module):
+    def __init__(self, d_model: int, device=None, dtype=None):
+        super().__init__()
+        self.d_ff = d_model * 8 // 3 // 64 * 64
+        self.w1 = Linear(d_model, self.d_ff, device, dtype)
+        self.w2 = Linear(self.d_ff, d_model, device, dtype)
+        self.w3 = Linear(d_model, self.d_ff, device, dtype)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        gate_in = self.w1.forward(x)
+        gate_out = gate_in * self.sigmoid(gate_in)
+        return self.w2.forward(gate_out * self.w3.forward(x))

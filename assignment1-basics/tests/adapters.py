@@ -89,7 +89,11 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    model = m.SWiGLU(d_model, w1_weight.device, w1_weight.dtype)
+    model.w1.weights.data = w1_weight
+    model.w2.weights.data = w2_weight
+    model.w3.weights.data = w3_weight
+    return model.forward(in_features)
 
 
 def run_scaled_dot_product_attention(
