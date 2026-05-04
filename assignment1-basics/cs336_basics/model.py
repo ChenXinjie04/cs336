@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch
 from einops import einsum, rearrange
 import math
+from jaxtyping import Bool, Float, Int
+from torch import Tensor
 
 
 class Linear(nn.Module):
@@ -94,3 +96,17 @@ def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
     x = torch.exp(x)
     x_sum = torch.sum(x, dim=dim, keepdim=True)
     return x / x_sum
+
+
+def scaled_dot_product_attention(
+    Q: Float[Tensor, " ... queries d_k"],
+    K: Float[Tensor, " ... keys d_k"],
+    V: Float[Tensor, " ... keys d_v"],
+    mask: Bool[Tensor, " ... queries keys"] | None = None,
+) -> Float[Tensor, " ... queries d_v"]:
+    d_k = Q.shape[-1]
+    qk = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys")
+    if mask is not None:
+        qk = qk.masked_fill(~mask, float("-inf"))
+    qk = softmax(qk / (d_k**0.5), dim=-1)
+    return einsum(qk, V, "... queries keys, ... keys d_v -> ... queries d_v")
