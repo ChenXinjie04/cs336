@@ -110,3 +110,35 @@ def scaled_dot_product_attention(
         qk = qk.masked_fill(~mask, float("-inf"))
     qk = softmax(qk / (d_k**0.5), dim=-1)
     return einsum(qk, V, "... queries keys, ... keys d_v -> ... queries d_v")
+
+
+class multihead_self_attention(nn.Module):
+    def __init__(
+        self, d_model: int, num_heads: int, RoPE: RotaryPositionalEmbedding | None = None, device=None, dtype=None
+    ):
+        super().__init__()
+        self.q_proj_weight = Linear(d_model, d_model, device, dtype)
+        self.k_proj_weight = Linear(d_model, d_model, device, dtype)
+        self.v_proj_weight = Linear(d_model, d_model, device, dtype)
+        self.o_proj_weight = Linear(d_model, d_model, device, dtype)
+        self.RoPE = RoPE
+        self.num_heads = num_heads
+        self.device = device
+        self.dtype = dtype
+        self.d_model = d_model
+
+    def forward(self, x: Tensor, token_positions: Tensor | None = None) -> Tensor:
+        seq_len = x.shape[1]
+        q = self.q_proj_weight.forward(x)
+        k = self.k_proj_weight.forward(x)
+        v = self.v_proj_weight.forward(x)
+        q = rearrange(q, "batch seq (num_heads d_q) -> batch num_heads seq d_q", num_heads=self.num_heads)
+        k = rearrange(k, "batch seq (num_heads d_k) -> batch num_heads seq d_k", num_heads=self.num_heads)
+        v = rearrange(v, "batch seq (num_heads d_v) -> batch num_heads seq d_v", num_heads=self.num_heads)
+        if self.RoPE is not None and token_positions is not None:
+            q = self.RoPE.forward(q, token_positions)
+            k = self.RoPE.forward(k, token_positions)
+        mask = torch.tril(torch.ones(seq_len, seq_len, device=self.device, dtype=torch.bool))
+        v = scaled_dot_product_attention(q, k, v, mask)
+        v = rearrange(v, "... heads seq d_v -> ... seq (heads d_v)")
+        return self.o_proj_weight.forward(v)
