@@ -7,7 +7,7 @@ from typing import IO, Any, BinaryIO
 import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
-from torch import Tensor
+from torch import Tensor, mode
 from cs336_basics.train_bpe_fast import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 import cs336_basics.model as m
@@ -89,7 +89,7 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    model = m.SWiGLU(d_model, w1_weight.device, w1_weight.dtype)
+    model = m.SWiGLU(d_model, d_ff, w1_weight.device, w1_weight.dtype)
     model.w1.weights.data = w1_weight
     model.w2.weights.data = w2_weight
     model.w3.weights.data = w3_weight
@@ -148,7 +148,7 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    model = m.multihead_self_attention(d_model, num_heads, None, in_features.device, in_features.dtype)
+    model = m.MultiheadSelfAttention(d_model, num_heads, None, in_features.device, in_features.dtype)
     model.q_proj_weight.weights.data = q_proj_weight
     model.k_proj_weight.weights.data = k_proj_weight
     model.v_proj_weight.weights.data = v_proj_weight
@@ -194,7 +194,7 @@ def run_multihead_self_attention_with_rope(
         implementation with the given QKV projection weights and input features.
     """
     RoPE = m.RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, in_features.device)
-    model = m.multihead_self_attention(d_model, num_heads, RoPE, in_features.device, in_features.dtype)
+    model = m.MultiheadSelfAttention(d_model, num_heads, RoPE, in_features.device, in_features.dtype)
     model.q_proj_weight.weights.data = q_proj_weight
     model.k_proj_weight.weights.data = k_proj_weight
     model.v_proj_weight.weights.data = v_proj_weight
@@ -295,7 +295,27 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    q_proj_weight = weights["attn.q_proj.weight"]
+    k_proj_weight = weights["attn.k_proj.weight"]
+    v_proj_weight = weights["attn.v_proj.weight"]
+    out_proj_weight = weights["attn.output_proj.weight"]
+    ln1_weight = weights["ln1.weight"]
+    ffn_w1_weight = weights["ffn.w1.weight"]
+    ffn_w2_weight = weights["ffn.w2.weight"]
+    ffn_w3_weight = weights["ffn.w3.weight"]
+    ln2_weight = weights["ln2.weight"]
+    RoPE = m.RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, q_proj_weight.device)
+    model = m.transformer_block(d_model, num_heads, d_ff, RoPE, q_proj_weight.device, q_proj_weight.dtype)
+    model.multihead_self_attention.q_proj_weight.weights.data = q_proj_weight
+    model.multihead_self_attention.k_proj_weight.weights.data = k_proj_weight
+    model.multihead_self_attention.v_proj_weight.weights.data = v_proj_weight
+    model.multihead_self_attention.o_proj_weight.weights.data = out_proj_weight
+    model.norm1.weights.data = ln1_weight
+    model.norm2.weights.data = ln2_weight
+    model.position_wise_ff.w1.weights.data = ffn_w1_weight
+    model.position_wise_ff.w2.weights.data = ffn_w2_weight
+    model.position_wise_ff.w3.weights.data = ffn_w3_weight
+    return model.forward(in_features)
 
 
 def run_transformer_lm(

@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 from einops import einsum, rearrange
 import math
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Bool, Float
 from torch import Tensor
 
 
@@ -46,9 +46,9 @@ class RMSNorm(nn.Module):
 
 
 class SWiGLU(nn.Module):
-    def __init__(self, d_model: int, device=None, dtype=None):
+    def __init__(self, d_model: int, d_ff: int, device=None, dtype=None):
         super().__init__()
-        self.d_ff = d_model * 8 // 3 // 64 * 64
+        self.d_ff = d_ff
         self.w1 = Linear(d_model, self.d_ff, device, dtype)
         self.w2 = Linear(self.d_ff, d_model, device, dtype)
         self.w3 = Linear(d_model, self.d_ff, device, dtype)
@@ -112,7 +112,7 @@ def scaled_dot_product_attention(
     return einsum(qk, V, "... queries keys, ... keys d_v -> ... queries d_v")
 
 
-class multihead_self_attention(nn.Module):
+class MultiheadSelfAttention(nn.Module):
     def __init__(
         self, d_model: int, num_heads: int, RoPE: RotaryPositionalEmbedding | None = None, device=None, dtype=None
     ):
@@ -142,3 +142,30 @@ class multihead_self_attention(nn.Module):
         v = scaled_dot_product_attention(q, k, v, mask)
         v = rearrange(v, "... heads seq d_v -> ... seq (heads d_v)")
         return self.o_proj_weight.forward(v)
+
+
+class transformer_block(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        RoPE: RotaryPositionalEmbedding | None = None,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        self.norm1 = RMSNorm(d_model, device=device, dtype=dtype)
+        self.norm2 = RMSNorm(d_model, device=device, dtype=dtype)
+        self.multihead_self_attention = MultiheadSelfAttention(d_model, num_heads, RoPE, device, dtype)
+        self.position_wise_ff = SWiGLU(d_model, d_ff, device, dtype)
+
+    def forward(self, x: Tensor) -> Tensor:
+        token_positions = torch.arange(0, x.shape[1], dtype=torch.int)
+        x1 = self.norm1.forward(x)
+        x1 = self.multihead_self_attention.forward(x1, token_positions)
+        x = x + x1
+        x2 = self.norm2(x)
+        x2 = self.position_wise_ff.forward(x2)
+        x = x + x2
+        return x
