@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 from einops import einsum, rearrange
+import math
 
 
 class Linear(nn.Module):
@@ -55,3 +56,41 @@ class SWiGLU(nn.Module):
         gate_in = self.w1.forward(x)
         gate_out = gate_in * self.sigmoid(gate_in)
         return self.w2.forward(gate_out * self.w3.forward(x))
+
+
+class RotaryPositionalEmbedding(nn.Module):
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+        super().__init__()
+        pair_idx = torch.arange(0, d_k // 2, device=device)
+        exponent = pair_idx * -2 / d_k
+        inv_freq = torch.exp(exponent * math.log(theta))
+        m = torch.arange(0, max_seq_len, device=device)
+        angles = torch.outer(m, inv_freq)
+        cos_table = torch.cos(angles)
+        sin_table = torch.sin(angles)
+        self.register_buffer(
+            "cos_table",
+            cos_table,
+            persistent=False,
+        )
+        self.register_buffer("sin_table", sin_table, persistent=False)
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        in_type = x.dtype
+        x = rearrange(x, "... (d two) -> ... d two", two=2)
+        x_even = x[..., 0]
+        x_odd = x[..., 1]
+        cos = self.cos_table[token_positions].to(in_type)
+        sin = self.sin_table[token_positions].to(in_type)
+        x_even_out = x_even * cos - x_odd * sin
+        x_odd_out = x_even * sin + x_odd * cos
+        x = torch.stack([x_even_out, x_odd_out], dim=-1)
+        return rearrange(x, "... pair pos -> ... (pair pos)")
+
+
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+    max_elem = torch.max(x, dim=dim, keepdim=True)[0]
+    x = x - max_elem
+    x = torch.exp(x)
+    x_sum = torch.sum(x, dim=dim, keepdim=True)
+    return x / x_sum
