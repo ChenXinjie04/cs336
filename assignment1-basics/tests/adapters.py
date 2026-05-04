@@ -7,7 +7,7 @@ from typing import IO, Any, BinaryIO
 import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
-from torch import Tensor, mode
+from torch import Tensor, is_inference, mode
 from cs336_basics.train_bpe_fast import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 import cs336_basics.model as m
@@ -305,7 +305,7 @@ def run_transformer_block(
     ffn_w3_weight = weights["ffn.w3.weight"]
     ln2_weight = weights["ln2.weight"]
     RoPE = m.RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, q_proj_weight.device)
-    model = m.transformer_block(d_model, num_heads, d_ff, RoPE, q_proj_weight.device, q_proj_weight.dtype)
+    model = m.TransformerBlock(d_model, num_heads, d_ff, RoPE, q_proj_weight.device, q_proj_weight.dtype)
     model.multihead_self_attention.q_proj_weight.weights.data = q_proj_weight
     model.multihead_self_attention.k_proj_weight.weights.data = k_proj_weight
     model.multihead_self_attention.v_proj_weight.weights.data = v_proj_weight
@@ -397,7 +397,33 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    model = m.TransformerLM(vocab_size, context_length, num_layers, d_model, d_ff, num_heads, rope_theta)
+    model.embedding.embeddings.data = weights["token_embeddings.weight"]
+    for i in range(num_layers):
+        layer = model.layers[i]
+        assert isinstance(layer, m.TransformerBlock)
+        q_proj_weight = weights[f"layers.{i}.attn.q_proj.weight"]
+        k_proj_weight = weights[f"layers.{i}.attn.k_proj.weight"]
+        v_proj_weight = weights[f"layers.{i}.attn.v_proj.weight"]
+        o_proj_weight = weights[f"layers.{i}.attn.output_proj.weight"]
+        ln1_weight = weights[f"layers.{i}.ln1.weight"]
+        ln2_weight = weights[f"layers.{i}.ln2.weight"]
+        w1 = weights[f"layers.{i}.ffn.w1.weight"]
+        w2 = weights[f"layers.{i}.ffn.w2.weight"]
+        w3 = weights[f"layers.{i}.ffn.w3.weight"]
+        layer.multihead_self_attention.q_proj_weight.weights.data = q_proj_weight
+        layer.multihead_self_attention.k_proj_weight.weights.data = k_proj_weight
+        layer.multihead_self_attention.v_proj_weight.weights.data = v_proj_weight
+        layer.multihead_self_attention.o_proj_weight.weights.data = o_proj_weight
+        layer.norm1.weights.data = ln1_weight
+        layer.norm2.weights.data = ln2_weight
+        layer.position_wise_ff.w1.weights.data = w1
+        layer.position_wise_ff.w2.weights.data = w2
+        layer.position_wise_ff.w3.weights.data = w3
+
+    model.ln.weights.data = weights["ln_final.weight"]
+    model.linear.weights.data = weights["lm_head.weight"]
+    return model.forward(in_indices)
 
 
 def run_rmsnorm(

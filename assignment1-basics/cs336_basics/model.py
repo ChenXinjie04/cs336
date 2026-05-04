@@ -61,7 +61,7 @@ class SWiGLU(nn.Module):
 
 
 class RotaryPositionalEmbedding(nn.Module):
-    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None, dtype=None):
         super().__init__()
         pair_idx = torch.arange(0, d_k // 2, device=device)
         exponent = pair_idx * -2 / d_k
@@ -144,7 +144,7 @@ class MultiheadSelfAttention(nn.Module):
         return self.o_proj_weight.forward(v)
 
 
-class transformer_block(nn.Module):
+class TransformerBlock(nn.Module):
     def __init__(
         self,
         d_model: int,
@@ -168,4 +168,36 @@ class transformer_block(nn.Module):
         x2 = self.norm2(x)
         x2 = self.position_wise_ff.forward(x2)
         x = x + x2
+        return x
+
+
+class TransformerLM(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        context_length: int,
+        num_layers: int,
+        d_model: int,
+        d_ff: int,
+        num_heads: int,
+        theta: float,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        d_k = d_model // num_heads
+        self.RoPE = RotaryPositionalEmbedding(theta, d_k, context_length, device, dtype)
+        self.embedding = Embedding(vocab_size, d_model, device, dtype)
+        self.layers = nn.ModuleList(
+            [TransformerBlock(d_model, num_heads, d_ff, self.RoPE, device, dtype) for _ in range(num_layers)]
+        )
+        self.ln = RMSNorm(d_model, device=device, dtype=dtype)
+        self.linear = Linear(d_model, vocab_size, device, dtype)
+
+    def forward(self, in_indices: Tensor) -> Tensor:
+        x = self.embedding.forward(in_indices)
+        for layer in self.layers:
+            x = layer.forward(x)
+        x = self.ln.forward(x)
+        x = self.linear(x)
         return x
