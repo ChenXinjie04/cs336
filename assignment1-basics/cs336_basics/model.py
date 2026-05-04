@@ -201,3 +201,8 @@ class TransformerLM(nn.Module):
         x = self.ln.forward(x)
         x = self.linear(x)
         return x
+
+
+if __name__ == "__main__":
+    TLM = TransformerLM(50257, 1024, 48, 1600, 4288, 25, 10000)
+    print(sum(p.numel() for p in TLM.parameters()))
