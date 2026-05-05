@@ -4,6 +4,7 @@ from einops import einsum, rearrange
 import math
 from jaxtyping import Bool, Float
 from torch import Tensor
+from cs336_basics.train import AdamW
 
 
 class Linear(nn.Module):
@@ -204,5 +205,6 @@ class TransformerLM(nn.Module):
 
 
 if __name__ == "__main__":
-    TLM = TransformerLM(50257, 1024, 48, 1600, 4288, 25, 10000)
-    print(sum(p.numel() for p in TLM.parameters()))
+    tlm = TransformerLM(3000, 1024, 12, 1600, 4288, 12, 10000)
+    optimizer = AdamW(tlm.parameters(), 0.001, 0.01, (0.1, 0.1), 0.001)
+    optimizer.step()

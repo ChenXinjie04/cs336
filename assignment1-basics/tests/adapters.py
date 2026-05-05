@@ -11,7 +11,7 @@ from torch import Tensor, is_inference, mode
 from cs336_basics.train_bpe_fast import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 import cs336_basics.model as m
-from cs336_basics.train import cross_entropy
+from cs336_basics.train import cross_entropy, AdamW
 
 
 def run_linear(
@@ -539,7 +539,7 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
