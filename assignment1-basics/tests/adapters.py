@@ -11,7 +11,7 @@ from torch import Tensor, is_inference, mode
 from cs336_basics.train_bpe_fast import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 import cs336_basics.model as m
-from cs336_basics.train import cross_entropy, AdamW
+from cs336_basics.train import cross_entropy, AdamW, lr_cosine_schedule
 
 
 def run_linear(
@@ -567,7 +567,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return lr_cosine_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(
