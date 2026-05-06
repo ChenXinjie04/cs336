@@ -30,8 +30,8 @@ class AdamW(torch.optim.Optimizer):
                     continue
                 state = self.state[p]
                 t = state.get("t", 1)
-                m = state.get("m", 0)
-                v = state.get("v", 0)
+                m: float = state.get("m", 0)
+                v: float = state.get("v", 0)
                 grad = p.grad.data
                 alpha = lr * (1 - beta2**t) ** 0.5 / (1 - beta1**t)
                 p.data -= lr * weight_decay * p.data
