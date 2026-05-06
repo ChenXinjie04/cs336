@@ -2,13 +2,17 @@ from torch.nn import SoftMarginLoss
 from cs336_basics.train_loop import data_loading, save_checkpoint
 from cs336_basics.train import cross_entropy, AdamW, gradient_clipping, lr_cosine_schedule
 from cs336_basics.model import TransformerLM, softmax
+from cs336_basics.logger import Logger
 import numpy as np
 import torch
 
 
 DATA_PATH = "/data/tinystories_tokens.npy"
+VALID_DATA_PATH = "/data/tinystories_valid_tokens.npy"
 CKPT_PATH = "/data/tinystories_ckpt.pt"
+LOG_PATH = "/data/log.jsonl"
 SAVE_RATE = 500
+VALID_RATE = 50
 batch_size = 3
 context_length = 1024
 vocab_size = 3000
@@ -30,12 +34,14 @@ cosin_cycle_iters = 4000
 max_l2_norm = 10
 model = TransformerLM(vocab_size, context_length, num_layers, d_model, d_ff, num_heads, theta, device, dtype)
 optimizer = AdamW(model.parameters(), lr, weight_decay, betas, 0.0001)
-dataset = np.memmap(DATA_PATH, np.int64)
+train_data = np.memmap(DATA_PATH, np.int64)
+valid_data = np.memmap(VALID_DATA_PATH, np.int64)
 
 
 def train():
+    logger = Logger(LOG_PATH)
     for step in range(max_step):
-        input, target = data_loading(dataset, batch_size, context_length, device)
+        input, target = data_loading(train_data, batch_size, context_length, device)
         output = model.forward(input)
         loss = cross_entropy(output, target)
         loss.backward()
@@ -44,6 +50,13 @@ def train():
             g["lr"] = lr_cosine_schedule(step, max_learning_rate, min_learning_rate, warmup_iters, cosin_cycle_iters)
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
+        logger.log_train(loss, step)
+        if step % VALID_RATE == 0:
+            input, target = data_loading(valid_data, batch_size, context_length, device)
+            with torch.no_grad():
+                output = model.forward(input)
+                valid_loss = cross_entropy(output, target)
+            logger.log_valid(valid_loss, step)
         if step % SAVE_RATE == 0:
             save_checkpoint(model, optimizer, step, CKPT_PATH)
 
