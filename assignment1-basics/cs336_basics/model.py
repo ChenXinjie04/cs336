@@ -206,5 +206,5 @@ class TransformerLM(nn.Module):
 
 if __name__ == "__main__":
     tlm = TransformerLM(3000, 1024, 12, 1600, 4288, 12, 10000)
-    optimizer = AdamW(tlm.parameters(), 0.001, 0.01, (0.1, 0.1), 0.001)
-    optimizer.step()
+    sd = tlm.state_dict()
+    print(type(sd))

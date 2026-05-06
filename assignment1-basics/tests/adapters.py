@@ -12,7 +12,7 @@ from cs336_basics.train_bpe_fast import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 import cs336_basics.model as m
 from cs336_basics.train import cross_entropy, AdamW, lr_cosine_schedule, gradient_clipping
-from cs336_basics.train_loop import data_loading
+from cs336_basics.train_loop import data_loading, save_checkpoint, load_checkpoint
 
 
 def run_linear(
@@ -587,7 +587,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -608,7 +608,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(

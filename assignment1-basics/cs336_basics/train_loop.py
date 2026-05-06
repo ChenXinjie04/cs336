@@ -10,3 +10,16 @@ def data_loading(dataset, batch_size, context_length, device):
     input = torch.from_numpy(input).to(device)
     target = torch.from_numpy(target).to(device)
     return (input, target)
+
+
+def save_checkpoint(model, optimizer, iteration, out):
+    model_state = model.state_dict()
+    optimizer_state = optimizer.state_dict()
+    torch.save({"model_state": model_state, "optimizer_state": optimizer_state, "iteration": iteration}, out)
+
+
+def load_checkpoint(src, model, optimizer):
+    ckpt = torch.load(src)
+    model.load_state_dict(ckpt["model_state"])
+    optimizer.load_state_dict(ckpt["optimizer_state"])
+    return ckpt["iteration"]
