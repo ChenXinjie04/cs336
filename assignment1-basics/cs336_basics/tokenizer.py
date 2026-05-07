@@ -51,7 +51,8 @@ class Tokenizer:
     def decode(self, ids: list[int]) -> str:
         bytes_str = b""
         for id in ids:
-            bytes_str += self.vocab[id]
+            new_str = self.vocab[id]
+            bytes_str += new_str
         return bytes_str.decode(errors="replace")
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:

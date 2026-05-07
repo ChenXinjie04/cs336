@@ -8,7 +8,7 @@ def cross_entropy(pred, targets):
     pred -= c
     actual = torch.gather(pred, -1, targets.unsqueeze(-1))
     pred = torch.exp(pred)
-    pred = torch.sum(pred, dim=-1)
+    pred = torch.sum(pred, dim=-1, keepdim=True)
     return (torch.log(pred) - actual).mean()
 
 

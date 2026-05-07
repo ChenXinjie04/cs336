@@ -33,6 +33,18 @@ def download_tiny_stories_data():
     vol.commit()
 
 
+@app.function(image=image, volumes={"/data": vol})
+def download_tiny_stories_valid_data():
+    import subprocess
+
+    subprocess.run(
+        "wget -O /data/TinyStoriesV2-GPT4-valid.txt --progress=dot:giga https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-valid.txt",
+        shell=True,
+        check=True,
+    )
+    vol.commit()
+
+
 @app.function(image=image, volumes={"/data": vol}, timeout=1800)
 def download_owt_data():
     import subprocess

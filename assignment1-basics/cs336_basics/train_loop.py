@@ -18,8 +18,8 @@ def save_checkpoint(model, optimizer, iteration, out):
     torch.save({"model_state": model_state, "optimizer_state": optimizer_state, "iteration": iteration}, out)
 
 
-def load_checkpoint(src, model, optimizer):
-    ckpt = torch.load(src)
+def load_checkpoint(src, model, optimizer, device):
+    ckpt = torch.load(src, map_location=device)
     model.load_state_dict(ckpt["model_state"])
     optimizer.load_state_dict(ckpt["optimizer_state"])
-    return ckpt["iteration"]
+    return ckpt["iteration"] + 1

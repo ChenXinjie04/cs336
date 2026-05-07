@@ -1,12 +1,12 @@
-vocab_size = 50_257
-context_length = 1024
-num_layers = 48
-d_model = 1600
-d_ff = 4288
-num_heads = 25
+vocab_size = 10000
+context_length = 256
+num_layers = 4
+d_model = 512
+d_ff = 1344
+num_heads = 16
 
 
-DTYPE_SIZE = 4  # float32
+DTYPE_SIZE = 2  # float32
 ADAMW_PARAM = 2 * 4  # size of m and v for AdamW. m and v are single precision
 
 

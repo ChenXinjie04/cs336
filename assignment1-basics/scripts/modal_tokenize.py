@@ -14,10 +14,22 @@ def tokenize_tinystories():
     import numpy as np
     from cs336_basics.tokenizer import Tokenizer
 
-    tokenizer = Tokenizer.from_files("/data/tokenizer_tiny_stories.pkl")
+    tokenizer = Tokenizer.from_files("/data/tokenizer_tiny_stories.pkl", ["<|endoftext|>"])
     with open("/data/TinyStoriesV2-GPT4-train.txt", encoding="utf-8") as f:
         arr = np.fromiter(tokenizer.encode_iterable(f), dtype=np.uint16)
     np.save("/data/tinystories_tokens.npy", arr)
+    vol.commit()
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=1200)
+def tokenize_tinystories_valid():
+    import numpy as np
+    from cs336_basics.tokenizer import Tokenizer
+
+    tokenizer = Tokenizer.from_files("/data/tokenizer_tiny_stories.pkl", ["<|endoftext|>"])
+    with open("/data/TinyStoriesV2-GPT4-valid.txt", encoding="utf-8") as f:
+        arr = np.fromiter(tokenizer.encode_iterable(f), dtype=np.uint16)
+    np.save("/data/tinystories_valid_tokens.npy", arr)
     vol.commit()
 
 
