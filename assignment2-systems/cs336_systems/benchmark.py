@@ -7,7 +7,7 @@ import argparse
 import timeit
 
 
-def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, context_length, rope_theta, device, warmup, n, mode):
+def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, context_length, rope_theta, device, warmup, n, mode, amp):
     x = torch.randint(0, vocab_size, (batch_size, context_length), device=device)
     y = torch.randint(0, vocab_size, (batch_size, context_length), device=device)
 
@@ -15,23 +15,26 @@ def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, cont
     optimizer = AdamW(model.parameters())
 
     def forward():
-        model.forward(x)
-        torch.cuda.synchronize()
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
+            model.forward(x)
+            torch.cuda.synchronize()
 
     def forward_backward():
-        output = model.forward(x)
-        loss = cross_entropy(output, y)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.cuda.synchronize()
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
+            output = model.forward(x)
+            loss = cross_entropy(output, y)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.cuda.synchronize()
 
     def full():
-        output = model.forward(x)
-        loss = cross_entropy(output, y)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
-        torch.cuda.synchronize()
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
+            output = model.forward(x)
+            loss = cross_entropy(output, y)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            torch.cuda.synchronize()
 
     def run(fn):
         times = []
@@ -68,8 +71,9 @@ if __name__ == "__main__":
     parser.add_argument("--warmup", type=int, default=10, help="warmup")
     parser.add_argument("--n", type=int, default=100, help="n")
     parser.add_argument(
-        "--mode", type=str, default="forward", choices=["forward", "forward_backward", "full"], help="forward only, forward+backward or full training step with optimizer"
+        "--mode", type=str, default="full", choices=["forward", "forward_backward", "full"], help="forward only, forward+backward or full training step with optimizer"
     )
+    parser.add_argument("--amp", type=bool, default=bool, help="auto mixed precision")
 
     args = parser.parse_args()
     mean, std = benchmark(
@@ -85,6 +89,7 @@ if __name__ == "__main__":
         args.warmup,
         args.n,
         args.mode,
+        args.amp,
     )
     print(mean)
     print(std)
