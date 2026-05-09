@@ -32,7 +32,9 @@ class Linear(nn.Module):
 
         super().__init__()
         std = math.sqrt(2 / (d_in + d_out))
-        self.weight: Float[Tensor, " d_out d_in"] = nn.Parameter(nn.init.trunc_normal_(torch.empty(d_out, d_in), std=std, a=-3 * std, b=3 * std), requires_grad=True)
+        self.weight: Float[Tensor, " d_out d_in"] = nn.Parameter(
+            nn.init.trunc_normal_(torch.empty(d_out, d_in), std=std, a=-3 * std, b=3 * std), requires_grad=True
+        )
 
     def forward(self, x: Float[Tensor, " ... d_in"]) -> Float[Tensor, " ... d_out"]:
         return einsum(x, self.weight, "... d_in, d_out d_in -> ... d_out")
@@ -45,7 +47,9 @@ class Embedding(nn.Module):
     def __init__(self, vocab_size: int, d_model: int):
         super().__init__()
         std = 1.0
-        self.weight = nn.Parameter(nn.init.trunc_normal_(torch.empty(vocab_size, d_model), std=std, a=-3 * std, b=3 * std), requires_grad=True)
+        self.weight = nn.Parameter(
+            nn.init.trunc_normal_(torch.empty(vocab_size, d_model), std=std, a=-3 * std, b=3 * std), requires_grad=True
+        )
 
     def forward(self, token_ids: Int[Tensor, " ..."]) -> Float[Tensor, " ... d_model"]:
         return self.weight[token_ids, :]
@@ -107,7 +111,9 @@ class RMSNorm(nn.Module):
 class RotaryEmbedding(nn.Module):
     def __init__(self, context_length: int, dim: int, theta: float = 10000.0):
         super().__init__()
-        self.register_buffer("_freq_cis_cache", RotaryEmbedding._init_cache(context_length, dim, theta), persistent=False)
+        self.register_buffer(
+            "_freq_cis_cache", RotaryEmbedding._init_cache(context_length, dim, theta), persistent=False
+        )
         self._freq_cis_cache: Float[Tensor, "2 context_length half_dim"]
 
     @staticmethod
@@ -123,7 +129,9 @@ class RotaryEmbedding(nn.Module):
         cos, sin = torch.cos(freqs), torch.sin(freqs)
         return torch.stack((cos, sin))
 
-    def forward(self, x: Float[Tensor, " ... seq d"], pos_ids: Int[Tensor, " ... seq"] | None) -> Float[Tensor, " ... seq d"]:
+    def forward(
+        self, x: Float[Tensor, " ... seq d"], pos_ids: Int[Tensor, " ... seq"] | None
+    ) -> Float[Tensor, " ... seq d"]:
         x1, x2 = rearrange(x, "... (half_d xy) -> xy ... half_d", xy=2).unbind(0)
 
         # Standard
@@ -181,13 +189,17 @@ class BasicsTransformerLM(nn.Module):
         rope_theta: float | None = 10_000.0,
     ):
         # Store the model configuration for serialization / deserialization
-        self.config = {k: v for k, v in locals().items() if k != "self" and not (k.startswith("__") and k.endswith("__"))}
+        self.config = {
+            k: v for k, v in locals().items() if k != "self" and not (k.startswith("__") and k.endswith("__"))
+        }
         super().__init__()
         self.context_length = context_length
         self.d_model = d_model
         self.token_embeddings = Embedding(vocab_size, d_model)
         d_head = d_model // num_heads
-        self.positional_encoder = RotaryEmbedding(context_length, d_head, rope_theta) if rope_theta is not None else None
+        self.positional_encoder = (
+            RotaryEmbedding(context_length, d_head, rope_theta) if rope_theta is not None else None
+        )
 
         self.layers = nn.ModuleList(
             [
@@ -414,12 +426,15 @@ def scaled_dot_product_attention(
     """
 
     d_k = K.shape[-1]
-    attention_scores = einsum(Q, K, "... query d_k, ... key d_k -> ... query key") / math.sqrt(d_k)
+    with nvtx.range("computing attention scores"):
+        attention_scores = einsum(Q, K, "... query d_k, ... key d_k -> ... query key") / math.sqrt(d_k)
 
-    if mask is not None:
-        attention_scores = torch.where(mask, attention_scores, float("-inf"))
+    with nvtx.range("computing softmax"):
+        if mask is not None:
+            attention_scores = torch.where(mask, attention_scores, float("-inf"))
 
-    attention_weights = softmax(attention_scores, dim=-1)  # Softmax over the key dimension
+    with nvtx.range("final matmul"):
+        attention_weights = softmax(attention_scores, dim=-1)  # Softmax over the key dimension
 
     return einsum(attention_weights, V, "... query key, ... key d_v ->  ... query d_v")
 
@@ -467,7 +482,9 @@ class CausalMultiHeadSelfAttention(nn.Module):
 
         self.positional_encoder: RotaryEmbedding | None = positional_encoder  # RoPE
 
-    def forward(self, x: Float[Tensor, " ... seq d_k"], token_positions: Int[Tensor, " ... seq"] | None = None) -> Float[Tensor, " ... seq d_v"]:
+    def forward(
+        self, x: Float[Tensor, " ... seq d_k"], token_positions: Int[Tensor, " ... seq"] | None = None
+    ) -> Float[Tensor, " ... seq d_v"]:
         """
         Args:
             x: The input to perform multi-headed self-attention on.
