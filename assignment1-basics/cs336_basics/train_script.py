@@ -24,7 +24,7 @@ d_ff = 1344
 theta = 10000
 num_heads = 16
 dtype = torch.bfloat16
-device = "cuda"
+device = "mps"
 weight_decay = 0.1
 betas = (0.9, 0.95)
 max_learning_rate = lr
@@ -37,13 +37,13 @@ optimizer = AdamW(model.parameters(), lr, weight_decay, betas, 0.0001)
 
 
 def train():
-    train_data = np.memmap(VALID_DATA_PATH, np.uint16)
+    train_data = np.memmap(DATA_PATH, np.uint16)
     valid_data = np.memmap(VALID_DATA_PATH, np.uint16)
     logger = Logger(LOG_PATH)
     start_step = 0
     lr = 0
     if os.path.exists(CKPT_PATH):
-        start_step = load_checkpoint(CKPT_PATH, model, optimizer, device)
+        start_step = load_checkpoint(CKPT_PATH, model, optimizer, device) + 1
     for step in range(start_step, max_step):
         input, target = data_loading(train_data, batch_size, context_length, device)
         output = model.forward(input)
@@ -90,7 +90,7 @@ def sample_next_token(input, temperature, top_p):
 
 
 def decode(input, temperature, max_new_tokens, eos_token_id, top_p=0.9):
-    load_checkpoint("./data/tinystories_ckpt_lr1e-03.pt", model, optimizer, device)
+    load_checkpoint("./data/tinystories_ckpt.pt", model, optimizer, device)
     length = len(input)
     while length < max_new_tokens:
         new_token_id = sample_next_token(input, temperature, top_p)

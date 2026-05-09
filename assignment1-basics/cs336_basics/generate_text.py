@@ -10,5 +10,4 @@ t = Tokenizer(vocab, merges, ["<|endoftext|>"])
 s = input("user_input: ")
 user_input = t.encode(s)
 lm_output = decode(user_input, 1.0, 180, last_id, 0.9)
-assert 9999 not in lm_output
 print("model_output: " + t.decode(lm_output))
