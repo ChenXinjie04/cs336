@@ -22,14 +22,19 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
         output.backward(torch.ones_like(output))
 
     forward, backward = [], []
+    mem_before_backward = 0
+    max_before_backward = 0
     for _ in range(n):
         start = timeit.default_timer()
         output = scaled_dot_product_attention(q, k, v, mask)
+        torch.cuda.synchronize()
         end = timeit.default_timer()
         forward.append(end - start)
-
+        mem_before_backward = torch.cuda.memory_allocated()
+        max_before_backward = torch.cuda.max_memory_allocated()
         start = timeit.default_timer()
         output.backward(torch.ones_like(output))
+        torch.cuda.synchronize()
         end = timeit.default_timer()
         backward.append(end - start)
 
@@ -38,6 +43,8 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
         "forward_std": statistics.stdev(forward),
         "backward_mean": statistics.mean(backward),
         "backward_std": statistics.stdev(backward),
+        "mem_before_backward": mem_before_backward / 1024**3,
+        "max_before_backward": max_before_backward / 1024**3,
     }
 
 
@@ -60,6 +67,7 @@ if __name__ == "__main__":
     rows = []
     for config in configs:
         try:
+            print("running: ", config)
             rows.append({**config, **benchmark(**config)})
         except torch.cuda.OutOfMemoryError:
             print("OOM: ", config)
