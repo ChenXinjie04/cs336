@@ -6,7 +6,7 @@ import statistics
 import pandas as pd
 
 
-def benchmark(batch_size, d_model, context_length, device, warmup, n):
+def benchmark(batch_size, d_model, context_length, device, warmup, n, jit):
     def make_tensor():
         x = torch.empty(batch_size, context_length, d_model, device=device)
         torch.nn.init.trunc_normal_(x, mean=0.0, std=1.0, a=-3, b=3)
@@ -17,8 +17,12 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
     v = make_tensor()
     mask = torch.tril(torch.ones(context_length, context_length, dtype=torch.bool, device=device))
 
+    attention_fn = scaled_dot_product_attention
+    if jit:
+        attention_fn = torch.compile(scaled_dot_product_attention)
+
     for _ in range(warmup):
-        output = scaled_dot_product_attention(q, k, v, mask)
+        output = attention_fn(q, k, v, mask)
         output.backward(torch.ones_like(output))
 
     forward, backward = [], []
@@ -26,7 +30,7 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
     max_before_backward = 0
     for _ in range(n):
         start = timeit.default_timer()
-        output = scaled_dot_product_attention(q, k, v, mask)
+        output = attention_fn(q, k, v, mask)
         torch.cuda.synchronize()
         end = timeit.default_timer()
         forward.append(end - start)
@@ -51,6 +55,7 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
 if __name__ == "__main__":
     d_models = [16, 32, 64, 128]
     context_lengths = [256, 1024, 4096, 8192, 16384]
+    jit_flags = [False, True]
 
     configs = [
         {
@@ -60,8 +65,9 @@ if __name__ == "__main__":
             "n": 100,
             "d_model": d_model,
             "context_length": context_length,
+            "jit": jit,
         }
-        for d_model, context_length in product(d_models, context_lengths)
+        for d_model, context_length, jit in product(d_models, context_lengths, jit_flags)
     ]
 
     rows = []
@@ -78,6 +84,8 @@ if __name__ == "__main__":
                         "forward_std": "oom",
                         "backward_mean": "oom",
                         "backward_std": "oom",
+                        "mem_before_backward": "oom",
+                        "max_before_backward": "oom",
                     },
                     **config,
                 }
