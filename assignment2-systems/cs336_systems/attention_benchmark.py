@@ -7,13 +7,14 @@ import pandas as pd
 
 
 def benchmark(batch_size, d_model, context_length, device, warmup, n):
-    q = torch.empty(batch_size, context_length, d_model, device=device)
-    k = torch.empty(batch_size, context_length, d_model, device=device)
-    v = torch.empty(batch_size, context_length, d_model, device=device)
+    def make_tensor():
+        x = torch.empty(batch_size, context_length, d_model, device=device)
+        torch.nn.init.trunc_normal_(x, mean=0.0, std=1.0, a=-3, b=3)
+        return x.requires_grad_(True)
 
-    torch.nn.init.trunc_normal_(q, mean=0.0, std=1.0, a=-3, b=3)
-    torch.nn.init.trunc_normal_(k, mean=0.0, std=1.0, a=-3, b=3)
-    torch.nn.init.trunc_normal_(v, mean=0.0, std=1.0, a=-3, b=3)
+    q = make_tensor()
+    k = make_tensor()
+    v = make_tensor()
     mask = torch.tril(torch.ones(context_length, context_length, dtype=torch.bool, device=device))
 
     for _ in range(warmup):
@@ -58,6 +59,7 @@ if __name__ == "__main__":
 
     rows = []
     for config in configs:
+        print("running ", config)
         rows.append({**benchmark(**config), **config})
 
     df = pd.DataFrame(rows)
