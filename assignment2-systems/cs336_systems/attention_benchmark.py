@@ -58,9 +58,37 @@ if __name__ == "__main__":
     ]
 
     rows = []
+    oom = False
     for config in configs:
+        if oom:
+            rows.append(
+                {
+                    **{
+                        "forward_mean": "oom",
+                        "forward_std": "oom",
+                        "backward_mean": "oom",
+                        "backward_std": "oom",
+                    },
+                    **config,
+                }
+            )
         print("running ", config)
-        rows.append({**benchmark(**config), **config})
+        try:
+            rows.append({**benchmark(**config), **config})
+        except torch.cuda.OutOfMemoryError:
+            print("OOM: ", config)
+            oom = True
+            rows.append(
+                {
+                    **{
+                        "forward_mean": "oom",
+                        "forward_std": "oom",
+                        "backward_mean": "oom",
+                        "backward_std": "oom",
+                    },
+                    **config,
+                }
+            )
 
     df = pd.DataFrame(rows)
     latex = df.to_latex(index=False, float_format="%.6f")
