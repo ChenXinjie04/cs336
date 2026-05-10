@@ -1,13 +1,11 @@
 from cs336_basics.model import BasicsTransformerLM
 from cs336_basics.optimizer import AdamW
 from cs336_basics.nn_utils import cross_entropy
-import statistics
 import torch
 import argparse
-import timeit
 
 
-def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, context_length, rope_theta, device, warmup, n, mode, amp):
+def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, context_length, rope_theta, device, mode, amp, snap_path):
     x = torch.randint(0, vocab_size, (batch_size, context_length), device=device)
     y = torch.randint(0, vocab_size, (batch_size, context_length), device=device)
 
@@ -15,9 +13,12 @@ def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, cont
     optimizer = AdamW(model.parameters())
 
     def forward():
+        torch.cuda.memory._record_memory_history(max_entries=1000000)
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
             model.forward(x)
             torch.cuda.synchronize()
+        torch.cuda.memory._dump_snapshot(snap_path)
+        torch.cuda.memory._record_memory_history(enabled=None)
 
     def forward_backward():
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
@@ -28,6 +29,7 @@ def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, cont
             torch.cuda.synchronize()
 
     def full():
+        torch.cuda.memory._record_memory_history(max_entries=1000000)
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp):
             output = model.forward(x)
             loss = cross_entropy(output, y)
@@ -35,26 +37,15 @@ def benchmark(vocab_size, batch_size, d_model, d_ff, num_layers, num_heads, cont
             loss.backward()
             optimizer.step()
             torch.cuda.synchronize()
-
-    def run(fn):
-        times = []
-        for _ in range(warmup):
-            fn()
-        torch.cuda.synchronize()
-        for _ in range(n):
-            times.append(timeit.timeit(fn, number=1))
-        return times
+        torch.cuda.memory._dump_snapshot("memory_snapshot.pickle")
+        torch.cuda.memory._record_memory_history(enabled=None)
 
     if mode == "forward":
-        times = run(forward)
+        forward()
     elif mode == "forward_backward":
-        times = run(forward_backward)
+        forward_backward()
     else:
-        times = run(full)
-
-    mean = statistics.mean(times)
-    std = statistics.stdev(times)
-    return mean, std
+        full()
 
 
 if __name__ == "__main__":
@@ -68,15 +59,14 @@ if __name__ == "__main__":
     parser.add_argument("--context_length", type=int, default=256, help="context length")
     parser.add_argument("--rope_theta", type=int, default=10000, help="rope theta")
     parser.add_argument("--device", type=str, default="cuda", help="device")
-    parser.add_argument("--warmup", type=int, default=10, help="warmup")
-    parser.add_argument("--n", type=int, default=10, help="n")
     parser.add_argument(
         "--mode", type=str, default="full", choices=["forward", "forward_backward", "full"], help="forward only, forward+backward or full training step with optimizer"
     )
     parser.add_argument("--amp", type=bool, default=bool, help="auto mixed precision")
+    parser.add_argument("--snap_path", type=str, default="memory_snapshot.pickle", help="path of snap shot")
 
     args = parser.parse_args()
-    mean, std = benchmark(
+    benchmark(
         args.vocab_size,
         args.batch_size,
         args.d_model,
@@ -86,10 +76,7 @@ if __name__ == "__main__":
         args.context_length,
         args.rope_theta,
         args.device,
-        args.warmup,
-        args.n,
         args.mode,
         args.amp,
+        args.snap_path,
     )
-    print(mean)
-    print(std)
