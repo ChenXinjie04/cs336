@@ -14,7 +14,7 @@ def benchmark(batch_size, d_model, context_length, device, warmup, n):
     torch.nn.init.trunc_normal_(q, mean=0.0, std=1.0, a=-3, b=3)
     torch.nn.init.trunc_normal_(k, mean=0.0, std=1.0, a=-3, b=3)
     torch.nn.init.trunc_normal_(v, mean=0.0, std=1.0, a=-3, b=3)
-    mask = torch.tril(torch.ones(context_length, context_length, dtype=torch.bool))
+    mask = torch.tril(torch.ones(context_length, context_length, dtype=torch.bool, device=device))
 
     for _ in range(warmup):
         output = scaled_dot_product_attention(q, k, v, mask)
